@@ -1,0 +1,9 @@
+debugpy
+psutil
+pywinauto
+easyocr
+Pillow 
+pytest
+pyautogui
+opencv-python
+
