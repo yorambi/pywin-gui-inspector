@@ -95,8 +95,58 @@ All search and click methods follow the same priority order:
 
 ---
 
+## Step 3 — Live automation without a snapshot (`LiveSession`)
+
+For scripts that need to run against a live, changing UI — or when you
+don't want the JSON round-trip — use `gui_live.py`:
+
+```python
+from gui_live import connect_application
+
+s = connect_application(title="Notepad")
+
+# Path syntax: "Name||ControlType->Child||Type"
+s.menu_click("File->Save As")
+s.set_text("File name:||Edit", "report.txt")
+s.click("Save||Button")
+
+# Scope all calls to a window prefix
+with s.path("Untitled - Notepad||Window"):
+    s.click("Edit||MenuItem")
+```
+
+See {doc}`live-mode` for the full path syntax and {doc}`api/live-session`
+for the complete API.
+
+---
+
+## Step 4 — Record and replay (`gui_recorder.py`)
+
+The fastest way to build an automation script is to just do the task once
+and let the recorder capture it:
+
+```bash
+python gui_recorder.py -o login_flow.py
+```
+
+1. A **tray icon** appears in the system tray
+2. Press **F7** to start recording
+3. Hover to see the green highlight and path tooltip
+4. Do the UI actions you want to automate
+5. Press **F9** to stop — the script is written to `login_flow.py`
+
+The generated script uses `gui_live.py` calls and runs immediately after
+you update the `connect_application(title="...")` line.
+
+See {doc}`recorder` for full controls and options.
+
+---
+
 ## What next?
 
-- See {doc}`cli-reference` for all `gui_detector.py` flags
-- See {doc}`api/gui-session` for the full `GUISession` API
-- Browse the {doc}`examples/index` for complete worked examples
+- {doc}`cli-reference` — all `gui_detector.py` flags
+- {doc}`live-mode` — live-mode path syntax and features
+- {doc}`recorder` — recorder controls and generated script format
+- {doc}`api/gui-session` — full `GUISession` API
+- {doc}`api/live-session` — full `LiveSession` API
+- {doc}`examples/index` — nine complete worked examples

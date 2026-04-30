@@ -1,8 +1,13 @@
 # pywin-gui-inspector
 
-A Windows GUI inspection and automation toolkit built on [Pywinauto](https://pywinauto.readthedocs.io/), [EasyOCR](https://github.com/JaidedAI/EasyOCR), and [PyAutoGUI](https://github.com/asweigart/pyautogui).
+A Windows GUI inspection, automation, and recording toolkit built on
+[Pywinauto](https://pywinauto.readthedocs.io/),
+[EasyOCR](https://github.com/JaidedAI/EasyOCR), and
+[PyAutoGUI](https://github.com/asweigart/pyautogui).
 
-**Inspect** any running application's UI element tree, **search** it by text or pixel template, **export** the results to JSON, and **drive** any automation script from that export using the companion helper library.
+**Inspect** any running application's UI element tree, **export** the results
+to JSON, **automate** from the export or live, **record** your own interactions
+and replay them as a Python script.
 
 ---
 
@@ -10,529 +15,392 @@ A Windows GUI inspection and automation toolkit built on [Pywinauto](https://pyw
 
 ```
 pywin-gui-inspector/
-├── gui_detector.py   # CLI tool — inspect, OCR, image-search, export
-├── gui_helper.py     # Python library — load exports and drive automation
-└── README.md
+├── gui_detector.py   # CLI — inspect windows, OCR, image-search, JSON export
+├── gui_helper.py     # Library — load JSON exports, drive automation (GUISession, ScriptWriter)
+├── gui_live.py       # Library — live automation without a snapshot (LiveSession, UIPath)
+├── gui_recorder.py   # App — system-tray recorder → generates gui_live.py scripts
+└── ExampleScripts/   # Nine worked examples
 ```
 
 | File | Purpose |
 |---|---|
-| `gui_detector.py` | Run from the command line to inspect a window and produce a JSON export |
-| `gui_helper.py` | Import in your own scripts to load the export and interact with the UI |
+| `gui_detector.py` | Inspect any window and produce a structured JSON export |
+| `gui_helper.py` | Load exports and automate via element tree, OCR, or image match |
+| `gui_live.py` | Automate live against the running UIA tree — no snapshot needed |
+| `gui_recorder.py` | Record your mouse and keyboard → output a ready-to-run script |
 
 ---
 
 ## Features
 
-**gui_detector.py**
-- **Interactive mode** — lists all open windows and lets you pick one to inspect
-- **Connect by PID or title** — target any running process directly
-- **Full element tree** — recursively walks every UI control and prints a readable tree
-- **Rich property extraction** — captures name, control type, class, automation ID, bounding rectangle, visibility, enabled state, handle, PID, and framework ID per element
-- **Watch mode** — polls a window at a configurable interval and prints live diffs of added/removed elements
-- **JSON export** — saves the full element tree, OCR results, and image matches to a single structured JSON file
-- **Configurable depth** — limit recursion to avoid noise in deeply nested UIs
-- **Auto UAC elevation** — requests Administrator privileges on launch; falls back gracefully if declined
-- **EasyOCR text search** — screenshots the window and finds any visible text by keyword, with screen coordinates and confidence score
-- **Image / template search** — finds icon-only or custom-drawn controls by supplying a reference `.png` screenshot
+### `gui_detector.py` — Inspector CLI
+- **Interactive / PID / title mode** — pick or target any running window
+- **Full element tree** — name, control type, automation ID, rect, visibility, handle, PID, framework
+- **Watch mode** — polls a window and prints live element diffs
+- **EasyOCR text search** — `--find "Save"` locates any visible text with screen coordinates
+- **Image template search** — `--image icon.png` finds pixel-matched controls
+- **JSON export** — element tree + OCR + image results in one file
+- **Auto UAC elevation** — requests admin rights on launch, falls back gracefully
 
-**gui_helper.py**
-- **`GUISession`** — high-level automation session loaded from a JSON export
-- **Three-layer smart click** — tries element tree → OCR → image match automatically
-- **Live Pywinauto actions** — click, type, and interact with elements using stable automation IDs
-- **Pixel click fallback** — PyAutoGUI clicks for when live automation is not available
-- **Standalone tree helpers** — `find_by_name`, `find_by_automation_id`, `find_all`, `flatten_tree`, and more
+### `gui_helper.py` — Automation Library (JSON-based)
+- **`GUISession`** — loads a JSON export and drives automation
+- **Three-layer smart click** — element tree → OCR → image, in priority order
+- **`ScriptWriter`** — generates `gui_live.py` scripts from plain-English instructions
+- **Standalone tree helpers** — `find_by_name`, `find_all`, `flatten_tree`, and more
+
+### `gui_live.py` — Live Automation Library
+- **`LiveSession`** — connects directly to the running UIA tree, no JSON snapshot required
+- **Path syntax** — `"Window||Window->Button||Button"` with wildcards (`*`) and regex
+- **`UIPath` context** — `with s.path("App||Window"):` scopes all calls inside the block
+- **Grid addressing** — `#[row,col]` picks from a group of matching elements
+- **`wait_is_ready`** — waits for enabled + visible + cursor not busy before clicking
+- **`OCRWrapper`** — EasyOCR results usable as drop-in UIA elements
+- **`set_text` / `set_combobox`** — reliable text entry (triple-click + Ctrl+A)
+- **`menu_click`** — `"File->Save As->PDF"` multi-level menu navigation
+- **App lifecycle** — `start_application`, `connect_application`, `focus`, `close`
+
+### `gui_recorder.py` — Background Recorder
+- **System tray icon** — sits in the Windows tray until you need it
+- **Start hotkey** — press **F7** (configurable) to begin recording
+- **Stop hotkey** — press **F9** (configurable) to stop and save
+- **Live element highlight** — green border tracks the element under your cursor
+- **Path tooltip** — floating label shows the element's UIA path as you hover
+- **Records** — left/right clicks, keyboard input, hotkeys (Ctrl+S, etc.)
+- **Generates** — a complete, ready-to-run `gui_live.py` script
+- **Tray menu** — Start / Stop / Cancel / Open last script / Exit
 
 ---
 
 ## Requirements
 
-| | Details |
+| | |
 |---|---|
 | OS | Windows only |
-| Python | 3.9+ |
+| Python | 3.9 or later |
 
-### Install dependencies
+### Install
 
-**Core (required for `gui_detector.py`):**
+**Core inspection and JSON-based automation:**
 ```bash
-pip install pywinauto
+pip install pywinauto pyautogui
 ```
 
-**OCR mode — `--ocr` / `--find` (and `gui_helper.py` OCR actions):**
+**OCR features (`--ocr`, `--find`, `OCRWrapper`):**
 ```bash
 pip install easyocr Pillow
 ```
-> EasyOCR is a pure-Python deep-learning engine — no external binary needed. Model weights (~100 MB) are downloaded automatically on first use.
 
-**Image / template search — `--image` (and `gui_helper.py` image actions):**
+**Image template search (`--image`):**
 ```bash
-pip install pyautogui opencv-python
+pip install opencv-python
 ```
 
-**Install everything at once:**
+**Recorder and live-mode extras:**
 ```bash
-pip install pywinauto easyocr Pillow pyautogui opencv-python
+pip install keyboard pystray
 ```
 
-> Each optional dependency group is lazy-loaded and only checked when the relevant feature is actually used.
+**Everything at once:**
+```bash
+pip install pywinauto pyautogui easyocr Pillow opencv-python keyboard pystray
+```
 
 ---
 
 ## Quickstart
 
-### Step 1 — Inspect a window and export to JSON
+### 1 — Inspect a window and export to JSON
 
 ```bash
-# By window title (partial match)
+# Interactive — pick from all open windows
+python gui_detector.py --export dump.json
+
+# By title, with OCR scan
 python gui_detector.py --title "Notepad" --ocr --export notepad.json
 
-# By process ID, with image template search too
-python gui_detector.py --pid 1234 --find "Save" --image save_icon.png --export dump.json
-
-# Interactive — pick from a list of all open windows
-python gui_detector.py --export dump.json
+# By PID, with image search
+python gui_detector.py --pid 1234 --image save_icon.png --export dump.json
 ```
 
-### Step 2 — Use the export in your automation script
+### 2 — Automate from the export (`GUISession`)
 
 ```python
 from gui_helper import GUISession
 
-s = GUISession("dump.json")
-s.print_summary()
-
-# Click by element name (Pywinauto tree)
-s.click_by_name("Save")
-
-# Click by automation ID (most reliable)
-s.click_by_auto_id("btn_ok")
-
-# Type into a text field
+s = GUISession("notepad.json")
+s.click_by_name("File")
+s.click_by_name("Save As")
 s.type_into("File name:", "report.txt")
-
-# Click visible text found by OCR
-s.click_ocr("Cancel")
-
-# Click an icon-only button found by image template
-s.click_image("save_icon.png")
-
-# Let the library figure out the best method automatically
-s.smart_click("Save")
+s.smart_click("Save")            # tries tree → OCR → image automatically
 ```
+
+### 3 — Generate a script from plain English (`ScriptWriter`)
+
+```python
+from gui_helper import ScriptWriter
+
+sw = ScriptWriter("notepad.json")
+sw.preview(
+    "click File, click Save As, "
+    "type report.txt into File name:, click Save"
+)
+```
+
+Output:
+```python
+s.click_by_auto_id('file_menu')
+s.click_ocr('Save As')
+s.type_into('File name:', 'report.txt')
+s.click_by_auto_id('btn_save')
+```
+
+### 4 — Live automation without a snapshot (`LiveSession`)
+
+```python
+from gui_live import connect_application
+
+s = connect_application(title="Notepad")
+s.summary()
+
+# Path syntax: "Name||ControlType->Child||Type"
+s.menu_click("File->Save As")
+s.set_text("File name:||Edit", "report.txt")
+s.click("Save||Button")
+
+# Scope all calls to a container with UIPath
+with s.path("Untitled - Notepad||Window"):
+    s.click("Edit||MenuItem")
+    s.click("Find||MenuItem")
+```
+
+### 5 — Record interactions and replay them (`gui_recorder.py`)
+
+```bash
+python gui_recorder.py                 # saves to recorded.py
+python gui_recorder.py -o login.py     # custom output file
+python gui_recorder.py --start F6 --stop F8   # custom hotkeys
+```
+
+1. A **tray icon** appears in the system tray (bottom-right)
+2. Press **F7** (or right-click tray → Start) to begin recording
+3. **Hover** over elements to see the green highlight and path tooltip
+4. **Click and type** normally — every action is captured
+5. Press **F9** (or right-click tray → Stop) to stop and save the script
+
+The generated script uses `gui_live.py` calls and is ready to run immediately.
 
 ---
 
-## gui_detector.py — CLI Reference
+## `gui_detector.py` — CLI Reference
 
 ```
 python gui_detector.py [OPTIONS]
 ```
 
-### Modes
-
-| Command | Description |
-|---|---|
-| `python gui_detector.py` | **Interactive** — shows all open windows, you pick one |
-| `python gui_detector.py --pid 1234` | Inspect by process ID |
-| `python gui_detector.py --title "Notepad"` | Inspect by partial window title |
-| `python gui_detector.py --dump` | List every open top-level window |
-| `python gui_detector.py --watch 1234` | Watch a PID for GUI changes in real time |
-
-> `--pid`, `--title`, `--dump`, and `--watch` are mutually exclusive.
-
-### Options
-
 | Flag | Default | Description |
 |---|---|---|
-| `--pid PID` | — | Connect by process ID |
-| `--title TEXT` | — | Connect by partial window title |
-| `--dump` | — | Dump all open windows to console |
+| `--pid PID` | — | Inspect by process ID |
+| `--title TEXT` | — | Inspect by partial window title |
+| `--dump` | — | List all open windows |
 | `--watch PID` | — | Poll a window and print element diffs |
-| `--depth N` | `8` | Maximum recursion depth |
-| `--export FILE.json` | — | Save results to a JSON file |
-| `--interval SECONDS` | `1.0` | Polling interval for `--watch` |
-| `--ocr` | — | Full EasyOCR scan of the window after Pywinauto inspection |
-| `--find TEXT` | — | OCR-search for a specific text string (implies `--ocr`) |
-| `--image FILE.png` | — | Search the screen for a reference image using PyAutoGUI |
-| `--confidence N` | `0.9` | Match threshold for `--image` (0.0–1.0) |
-
-### Examples
-
-**List all open windows:**
-```bash
-python gui_detector.py --dump
-```
-```
-──────────────────────────────────────────────────────────────────────
-  Found 12 open window(s)
-──────────────────────────────────────────────────────────────────────
-  [  1] PID=1234    handle=65842     title='Untitled - Notepad'
-  [  2] PID=5678    handle=131174    title='Task Manager'
-──────────────────────────────────────────────────────────────────────
-```
-
-**Inspect Notepad by title:**
-```bash
-python gui_detector.py --title "Notepad"
-```
-```
-[+] Inspecting: 'Untitled - Notepad'
-
-[Window] 'Untitled - Notepad'  class='Notepad'  rect=(100, 200, 900, 700)
-  [MenuBar] '<no name>'  rect=(100, 200, 900, 221)
-    [MenuItem] 'File'  auto_id='Item 1'
-    [MenuItem] 'Edit'  auto_id='Item 2'
-  [Edit] 'Text Editor'  class='Edit'  rect=(100, 221, 900, 700)
-  [StatusBar] '<no name>'  class='msctls_statusbar32'
-```
-
-**Find visible button text with OCR:**
-```bash
-python gui_detector.py --pid 1234 --find "Save"
-```
-```
-[*] OCR search for 'Save' in window (PID 1234)…
-
-──────────────────────────────────────────────────────────────────────
-  OCR — 2 result(s) matching 'Save'
-──────────────────────────────────────────────────────────────────────
-  [ 96%]  'Save'                          (412,310)→(463,328)
-  [ 91%]  'Save As'                       (412,332)→(490,350)
-──────────────────────────────────────────────────────────────────────
-```
-
-**Find an icon-only button by image template:**
-```bash
-python gui_detector.py --pid 1234 --image save_icon.png
-```
-```
-[*] Image search for template 'save_icon.png'  (confidence=0.9)…
-
-──────────────────────────────────────────────────────────────────────
-  Image search — 1 match(es) for 'save_icon.png'
-──────────────────────────────────────────────────────────────────────
-  [1]  center=(437,319)  rect=(412,304)→(462,334)
-──────────────────────────────────────────────────────────────────────
-```
-
-**Watch a window for UI changes:**
-```bash
-python gui_detector.py --watch 1234 --interval 0.5
-```
-```
-[*] Watching PID 1234 every 0.5s  (Ctrl-C to stop)
-
-  [*] Baseline: 18 element(s)
-  [=] No change
-  [+] New elements:     ['Save As', 'File name:', 'Cancel']
-  [-] Removed elements: ['Save As', 'File name:', 'Cancel']
-```
-
-**All three search modes combined:**
-```bash
-python gui_detector.py --pid 1234 --find "Save" --image save_icon.png --export dump.json
-```
+| `--depth N` | `8` | Max recursion depth |
+| `--export FILE.json` | — | Save results to JSON |
+| `--interval SECS` | `1.0` | Polling interval for `--watch` |
+| `--ocr` | — | Full EasyOCR scan of the window |
+| `--find TEXT` | — | OCR-search for a specific string |
+| `--image FILE.png` | — | PyAutoGUI image template search |
+| `--confidence N` | `0.9` | Match threshold for `--image` |
 
 ---
 
-## gui_helper.py — Library Reference
-
-`gui_helper.py` loads a JSON export from `gui_detector.py` and provides a clean API for automation scripts. No separate installation — just place it alongside your script.
-
-### Self-test
-
-Pass any export directly to verify the file loaded correctly and see what was captured:
-```bash
-python gui_helper.py dump.json
-```
+## `gui_helper.py` — Library Reference
 
 ### `GUISession`
 
-The main class. Loads an export and exposes all interaction methods.
-
 ```python
 from gui_helper import GUISession
 
-s = GUISession("dump.json")
+s = GUISession("dump.json", click_delay=0.3, move_duration=0.1)
 s.print_summary()
 ```
-```
-────────────────────────────────────────────────────────────
-  GUISession: 'Untitled - Notepad'  (PID 1234)
-────────────────────────────────────────────────────────────
-  Export file    : dump.json
-  Total elements : 42
-  Buttons        : 3
-  Edit fields    : 1
-  OCR results    : 18
-  Image matches  : 1
-────────────────────────────────────────────────────────────
-```
-
-#### Constructor
-
-```python
-GUISession(
-    export_path,          # path to the JSON file from gui_detector.py
-    click_delay=0.3,      # pause (seconds) after every click
-    move_duration=0.1,    # mouse move speed for PyAutoGUI
-)
-```
-
-#### Element tree methods
 
 | Method | Description |
 |---|---|
-| `s.find(name)` | Find an element node by name; returns dict or `None` |
-| `s.find_auto_id(auto_id)` | Find by exact automation ID |
-| `s.click_by_name(name)` | Click the first element matching *name* |
-| `s.click_by_auto_id(auto_id)` | Click by automation ID |
-| `s.click_by_name(name, live=True)` | Use Pywinauto `click_input()` instead of pixel click |
-| `s.type_into(name, text)` | Click an Edit field and type text |
-| `s.type_into(name, text, clear_first=False)` | Type without clearing the field first |
-| `s.all_buttons()` | List all enabled visible Button elements |
-| `s.all_edits()` | List all Edit (text input) elements |
-| `s.all_checkboxes()` | List all CheckBox elements |
-| `s.all_of_type(control_type)` | List all elements of any control type |
+| `s.click_by_name(name)` | Click element by name (substring) |
+| `s.click_by_auto_id(id)` | Click by exact automation ID (most robust) |
+| `s.type_into(name, text)` | Find Edit field and type |
+| `s.click_ocr(query)` | Click by visible OCR text |
+| `s.click_image(template)` | Click by pixel template match |
+| `s.smart_click(query)` | Auto-fallback: tree → OCR → image |
+| `s.all_buttons()` | List all Button elements |
+| `s.all_edits()` | List all Edit controls |
+| `s.summary()` | Return summary dict |
 
-#### OCR methods
-
-| Method | Description |
-|---|---|
-| `s.click_ocr(query)` | Click the screen position of the first OCR match for *query* |
-| `s.click_ocr(query, exact=True)` | Require an exact text match |
-| `s.ocr_text_at(query)` | Return the exact OCR string matched by *query* |
-| `s.all_ocr_text()` | Return a flat list of all detected OCR strings |
-
-#### Image methods
-
-| Method | Description |
-|---|---|
-| `s.click_image(template)` | Click the center of the first image template match |
-| `s.click_image()` | Click the first match regardless of template filename |
-
-#### Smart click
+### `ScriptWriter`
 
 ```python
-s.smart_click("Save")
+from gui_helper import ScriptWriter
+
+sw = ScriptWriter("dump.json")
+sw.preview("click File, click Save As, type report.txt into File name:, click Save")
+sw.write("...", output="my_script.py")
+script = sw.generate("...")
 ```
 
-Tries all three layers automatically in priority order:
-1. Element tree (name match)
-2. OCR results (text match)
-3. Image results (template filename match)
-
-Returns `True` on first success, `False` if nothing found in any layer.
-
-#### Introspection
-
-```python
-s.summary()         # dict with element counts, OCR count, image count
-s.print_summary()   # prints the summary table
-repr(s)             # GUISession(window='...', pid=..., elements=..., ...)
-```
+Supported step syntax: `click`, `type X into Y`, `press`, `hotkey`, `wait N seconds`,
+`screenshot as file.png`, `open the X menu`, `close`.
 
 ---
 
-### Standalone helper functions
+## `gui_live.py` — Live Session Reference
 
-These work directly on the tree dict without a session object.
+### Connecting
 
 ```python
-from gui_helper import (
-    load_export, flatten_tree,
-    find_by_name, find_by_automation_id, find_by_control_type, find_all,
-    element_rect, element_center,
-    find_ocr, find_all_ocr, ocr_center,
-    find_image_result, image_center,
-    print_flat,
-)
+from gui_live import connect_application, start_application
+
+s = connect_application(title="Notepad")       # attach to running app
+s = connect_application(pid=1234)
+s = start_application("notepad.exe")           # launch and attach
 ```
 
-| Function | Description |
+### Path syntax
+
+| Pattern | Matches |
 |---|---|
-| `load_export(path)` | Load a JSON export and return the raw dict |
-| `flatten_tree(node)` | Return a flat list of every element, depth-first |
-| `find_by_name(node, name)` | Depth-first search by name (substring, case-insensitive) |
-| `find_by_automation_id(node, id)` | Find by exact automation ID |
-| `find_by_control_type(node, type)` | Find the first element of a given control type |
-| `find_all(node, name=, control_type=, enabled_only=, visible_only=)` | Collect all elements matching all supplied filters |
-| `element_rect(node)` | Return `(left, top, right, bottom)` from a node |
-| `element_center(node)` | Return `(x, y)` center of a node |
-| `find_ocr(results, query)` | Find the first OCR result containing *query* |
-| `find_all_ocr(results, query)` | Find all OCR results containing *query* |
-| `ocr_center(ocr_result)` | Return `(x, y)` center of an OCR result |
-| `find_image_result(results, template)` | Find the first image result by template filename |
-| `image_center(image_result)` | Return `(x, y)` center of an image result |
-| `print_flat(node)` | Print a flat readable list of all elements |
+| `"OK\|\|Button"` | element named "OK" of type Button |
+| `"\|\|Edit"` | any Edit control |
+| `"Toolbar\|\|ToolBar->Save\|\|Button"` | Save button inside Toolbar |
+| `"*->\|\|Button"` | wildcard level, then any Button |
+| `"RegEx: .*Save.*\|\|Button"` | regex name match |
+| `"\|\|Button#[1,2]"` | row 1, col 2 of matched Buttons |
+| `"\|\|Slider%(0.8,0)"` | click 80% right of slider center |
 
-### Usage patterns
+### `LiveSession` methods
 
-**Pattern 1 — Automate a Save dialog:**
-```python
-from gui_helper import GUISession
+| Method | Description |
+|---|---|
+| `s.click(path)` | Click first matching element |
+| `s.double_click(path)` | Double-click |
+| `s.right_click(path)` | Right-click |
+| `s.set_text(path, text)` | Triple-click + Ctrl+A then type |
+| `s.set_combobox(path, text)` | Open dropdown and select |
+| `s.menu_click("File->Save As")` | Multi-level menu navigation |
+| `s.send_keys(text)` | Type a string |
+| `s.hotkey("ctrl", "s")` | Press a keyboard shortcut |
+| `s.smart_click(query)` | Tree → OCR fallback |
+| `s.ocr_find(query)` | Return `OCRWrapper` for first OCR match |
+| `s.ocr_click(query)` | Click first OCR match |
+| `s.drag_and_drop(src, tgt)` | Drag from one element to another |
+| `s.focus()` | Bring window to foreground |
+| `s.close()` | Close the application |
+| `s.path(prefix)` | `UIPath` context manager |
+| `s.find(path)` | Return element or `None` |
+| `s.find_all(path)` | Return list of matching elements |
 
-s = GUISession("dump.json")
-s.type_into("File name:", "report.txt")
-s.click_by_name("Save")
+---
+
+## `gui_recorder.py` — Recorder Reference
+
+```bash
+python gui_recorder.py [OPTIONS]
 ```
 
-**Pattern 2 — Drive by automation ID (most robust):**
-```python
-s = GUISession("dump.json")
-s.click_by_auto_id("FileNameBox", live=True)   # Pywinauto click_input
-s.click_by_auto_id("SaveButton",  live=True)
-```
+| Flag | Default | Description |
+|---|---|---|
+| `-o / --output` | `recorded.py` | Output script path |
+| `--start KEY` | `f7` | Start-recording hotkey |
+| `--stop KEY` | `f9` | Stop-recording hotkey |
 
-**Pattern 3 — OCR fallback for unlabelled controls:**
-```python
-s = GUISession("dump.json")
-if not s.click_by_name("Submit"):     # try element tree first
-    s.click_ocr("Submit")             # fall back to OCR
-```
+### Tray icon states
 
-**Pattern 4 — Bulk element processing:**
-```python
-from gui_helper import load_export, find_all, element_center
+| Icon | State |
+|---|---|
+| Green circle (🟢) | Idle — waiting |
+| Red circle (🔴) | Recording |
 
-data = load_export("dump.json")
-tree = data["element_tree"]
+### Tray menu
 
-for edit in find_all(tree, control_type="Edit"):
-    x, y = element_center(edit)
-    print(f"{edit['name']:30}  auto_id={edit['automation_id']}  center=({x},{y})")
-```
+| Item | Action |
+|---|---|
+| ▶ Start Recording (F7) | Begin capturing |
+| ■ Stop Recording (F9) | Stop and write script |
+| ✕ Cancel | Stop and discard all events |
+| 📄 Open last script | Open output file in Notepad |
+| Exit | Quit |
 
-**Pattern 5 — Filter with list comprehensions:**
-```python
-from gui_helper import load_export, flatten_tree
+### Controls
 
-data  = load_export("dump.json")
-nodes = flatten_tree(data["element_tree"])
-
-visible_buttons = [
-    n for n in nodes
-    if n.get("control_type") == "Button"
-    and n.get("is_visible")
-    and n.get("is_enabled")
-]
-```
+| Key | Action |
+|---|---|
+| **F7** | Start recording |
+| **F9** | Stop and save |
+| **Esc** | Cancel (discard events) |
 
 ---
 
 ## JSON Export Format
-
-When `--export` is used the output contains up to three sections:
 
 ```json
 {
   "element_tree": {
     "name": "Untitled - Notepad",
     "control_type": "Window",
-    "class_name": "Notepad",
     "automation_id": "",
     "rectangle": "(100, 200, 900, 700)",
     "is_visible": true,
     "is_enabled": true,
-    "handle": 65842,
     "process_id": 1234,
-    "framework_id": "Win32",
     "depth": 0,
-    "children": [ { "name": "", "control_type": "MenuBar", "...": "..." } ]
+    "children": [ { "...": "..." } ]
   },
   "ocr_results": [
-    {
-      "text": "Save",
-      "confidence": 0.963,
-      "rect": { "left": 412, "top": 310, "right": 463, "bottom": 328 }
-    }
+    { "text": "Save", "confidence": 96.3,
+      "rect": { "left": 412, "top": 310, "right": 463, "bottom": 328 } }
   ],
   "image_results": [
-    {
-      "template": "save_icon.png",
-      "confidence": 0.9,
+    { "template": "save_icon.png", "confidence": 0.9,
       "center": { "x": 437, "y": 319 },
-      "rect": { "left": 412, "top": 304, "right": 462, "bottom": 334 }
-    }
+      "rect": { "left": 412, "top": 304, "right": 462, "bottom": 334 } }
   ]
 }
 ```
-
-`ocr_results` is present only when `--ocr` or `--find` was used.
-`image_results` is present only when `--image` was used.
-When `--dump` is used the output is a flat JSON array of window objects instead.
-
----
-
-## Supported Frameworks
-
-The Pywinauto UIA backend works with:
-
-- Native Win32 applications
-- WinForms / WPF (.NET)
-- Qt (via Windows accessibility APIs)
-- Electron / CEF-based apps
-- MFC applications
-
-The `--image` template search and `gui_helper.py` image methods work on **any application** regardless of framework, since they match pixels directly on screen.
-
----
-
-## Administrator Privileges
-
-`gui_detector.py` automatically requests elevated privileges on launch:
-
-| Situation | Behaviour |
-|---|---|
-| Already running as Administrator | Continues silently |
-| UAC prompt → **Yes** | Elevated child launches with all original arguments; parent exits |
-| UAC prompt → **No** | Prints a warning and continues without admin rights |
-| UAC unavailable | Same — falls back to normal execution |
-
-> **Why it matters:** Windows blocks non-elevated processes from inspecting elevated ones (Task Manager, installers, system utilities). For everyday apps like Notepad or Chrome, elevation is not required.
 
 ---
 
 ## How It Works
 
 ```
-gui_detector.py
-├── is_admin() / elevate() / require_admin()        — UAC elevation
-├── _require_ocr_deps() / _get_ocr_reader()         — lazy EasyOCR init & cache
-├── capture_window()                                — Pillow ImageGrab screenshot
-├── _easyocr_results_to_dicts()                     — normalise quad-bbox → rect dicts
-├── ocr_find_text() / ocr_scan_all()                — EasyOCR search / full scan
-├── _require_image_deps() / image_find()            — PyAutoGUI template matching
-├── list_all_windows()                              — enumerate via Desktop(uia)
-├── inspect_by_pid() / inspect_by_title()           — connect & walk target window
-├── walk_elements() / get_element_info()            — recursive DFS + property extraction
-├── watch_window()                                  — polling loop with snapshot diffing
-└── main() / build_parser()                         — argparse CLI entry point
-
-gui_helper.py
-├── find_by_name/auto_id/control_type()             — tree search helpers
-├── find_all() / flatten_tree()                     — bulk tree traversal
-├── find_ocr() / find_all_ocr()                     — OCR result search
-├── find_image_result()                             — image result lookup
-├── GUISession.__init__()                           — load + parse JSON export
-├── GUISession.click_by_name/auto_id()              — tree-driven pixel/live click
-├── GUISession.type_into()                          — find Edit field + type text
-├── GUISession.click_ocr() / click_image()          — OCR and image-driven clicks
-└── GUISession.smart_click()                        — three-layer auto-fallback click
+gui_detector.py      inspect → walk UIA tree → screenshot → OCR / image search → JSON
+gui_helper.py        load JSON → search tree / OCR / images → pixel click / live click
+gui_live.py          connect live → path-based UIA search → TTL cache → smart click
+gui_recorder.py      tray + hotkeys → track cursor → UIA lookup → record events → script
 ```
+
+**Three search layers (used across all files):**
+
+| Priority | Layer | Best for |
+|---|---|---|
+| 1 | UIA element tree | Apps with automation IDs; most stable |
+| 2 | OCR (EasyOCR) | Custom-rendered text, Electron apps |
+| 3 | Image template | Icon-only buttons, pixel-matched controls |
+
+---
+
+## Supported Frameworks
+
+Pywinauto UIA works with Win32, WinForms, WPF, Qt, Electron/CEF, MFC, and UWP.
+Image and OCR features work on **any application** (pixel-level, framework-agnostic).
 
 ---
 
 ## Limitations
 
-- **Windows only** — Pywinauto does not support macOS or Linux
-- **Some apps restrict access** — protected processes require Administrator rights; the script requests elevation automatically and falls back gracefully if declined
-- **Electron / web-based UIs** — automation IDs are often sparse or absent; use `--depth 3` to keep output manageable
-- **EasyOCR speed** — accurate but slow on CPU; use `--find` with a short keyword rather than `--ocr` full scans; a CUDA-capable GPU speeds it up significantly
-- **Image template matching** — breaks if the window is resized or DPI changes; capture the reference `.png` at the exact same resolution and zoom level you will run the search at
-- **Dynamic UIs** — rapidly changing windows (games, video players) may produce noisy watch output
-- **`gui_helper.py` live actions** — `live=True` requires the target process to still be running and accessible
+- **Windows only** — Pywinauto requires the Windows accessibility APIs
+- **Protected processes** — Task Manager and system utilities need elevation (auto-requested)
+- **Electron / web UIs** — sparse automation IDs; use `--depth 3` and OCR fallback
+- **EasyOCR speed** — 2–5 s on CPU; a CUDA GPU reduces it to under 1 s
+- **Image matching** — breaks if DPI or zoom changes; capture at 100% scale
 
 ---
 

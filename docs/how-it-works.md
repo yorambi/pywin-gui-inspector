@@ -2,11 +2,30 @@
 
 ## Architecture
 
-The toolkit has two files with a clean separation of concerns:
+The toolkit is four files with a clear separation of concerns:
 
 ```
 gui_detector.py   — inspect, screenshot, search, export (run once per target)
-gui_helper.py     — load export, drive automation (used in your scripts)
+gui_helper.py     — load JSON export, drive automation (GUISession / ScriptWriter)
+gui_live.py       — live UIA automation, no snapshot required (LiveSession / UIPath)
+gui_recorder.py   — system tray recorder → captures actions → generates gui_live scripts
+```
+
+```
+┌─────────────────┐   JSON export   ┌──────────────────┐
+│ gui_detector.py │ ─────────────▶  │  gui_helper.py   │
+│  (inspector)    │                 │  (GUISession)     │
+└─────────────────┘                 └──────────────────┘
+
+┌─────────────────┐   live UIA      ┌──────────────────┐
+│ gui_live.py     │ ◀──────────────  Windows UIA tree  │
+│  (LiveSession)  │                 └──────────────────┘
+└─────────────────┘                          ▲
+         ▲                                   │ records
+┌─────────────────┐   generates script       │
+│ gui_recorder.py │ ─────────────────────────┘
+│  (tray app)     │
+└─────────────────┘
 ```
 
 ---
@@ -109,3 +128,66 @@ names in the tree at a given moment. On each poll it:
 2. Re-walks the element tree to build a new snapshot
 3. Computes `added = current - previous` and `removed = previous - current`
 4. Prints any changes and updates `previous`
+
+---
+
+## `gui_live.py`
+
+```
+connect_application() / start_application()
+└── Application(uia).connect()           pywinauto connection
+
+LiveSession._search(path)
+├── _parse(path)                         split "Name||Type->..." into _Entry list
+├── _path_find(root, entries)            recursive subtree search per entry
+│   └── _subtree_find(node, entry)       DFS collecting matches, depth ≤ 12
+├── _TTLCache.get/set                    2-second result cache per (handle, path)
+└── get_sorted_region(matches)           grid layout for #[row,col] selection
+
+LiveSession._do_click(element, offset)
+├── wait_is_ready(element)               polls enabled + visible + cursor
+├── element.rectangle()                  get screen coords
+└── pyautogui.moveTo() + click()         pixel click with optional %(dx,dy) offset
+
+LiveSession.menu_click("File->Save As")
+└── for each label: find() → _do_click() → sleep(delay)
+
+LiveSession.ocr_find(query)
+└── _ocr_scan(window)                    PIL screenshot → EasyOCR → OCRWrapper list
+
+UIPath.__enter__ / __exit__
+└── session._path_stack.append/pop       composable path prefix stack
+```
+
+---
+
+## `gui_recorder.py`
+
+```
+TrayApp.run()                            pystray.Icon.run() blocks main thread
+├── TkOverlay.start()                    Tkinter in its own daemon thread
+│   └── _flush() via root.after(50)      drains queue → updates strips + tooltip
+├── _register_hotkeys()                  keyboard.add_hotkey for start / stop
+└── pystray menu callbacks               on_start → begin(), on_stop → end()
+
+TrayApp._start_recording()
+├── Recorder.begin()
+│   ├── threading.Thread(_track_loop)    polls cursor + UIA → overlay queue
+│   └── threading.Thread(_click_loop)   polls GetAsyncKeyState → ClickEvent
+├── keyboard.on_press(_on_key)           TypeEvent / HotkeyEvent
+└── update tray icon → red
+
+TrayApp._stop_recording()
+├── Recorder.end() → list[events]
+├── generate_script(events)              events → gui_live.py Python source
+├── Path.write_text(script)             save to output file
+├── icon.notify(...)                    Windows tray notification
+└── update tray icon → green
+
+generate_script(events)
+└── for each event:
+    ClickEvent   → s.click() / s.right_click()
+    TypeEvent    → s.set_text()
+    HotkeyEvent  → s.hotkey() / s.press()
+    gap > 1.5 s  → time.sleep(N)
+```

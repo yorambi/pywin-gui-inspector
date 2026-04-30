@@ -1,28 +1,36 @@
 # pywin-gui-inspector
 
-A Windows GUI inspection and automation toolkit built on
+A Windows GUI inspection, automation, and recording toolkit built on
 [Pywinauto](https://pywinauto.readthedocs.io/),
 [EasyOCR](https://github.com/JaidedAI/EasyOCR), and
 [PyAutoGUI](https://github.com/asweigart/pyautogui).
 
-**Inspect** any running application's UI element tree, **search** it by text or
-pixel template, **export** the results to JSON, and **drive** any automation
-script from that export using the companion helper library.
+**Inspect** any running application's UI element tree, **export** it to JSON,
+**automate** from the export or live, and **record** your own interactions to
+generate a replay script — all from four self-contained Python files.
 
 ---
 
 ## At a glance
 
 ```bash
-# Inspect Notepad and export everything
+# 1. Inspect Notepad and export to JSON
 python gui_detector.py --title "Notepad" --ocr --export notepad.json
 
-# Use the export to drive automation
+# 2. Automate from the export
 python
 >>> from gui_helper import GUISession
 >>> s = GUISession("notepad.json")
->>> s.type_into("File name:", "report.txt")
 >>> s.smart_click("Save")
+
+# 3. Live automation — no snapshot needed
+>>> from gui_live import connect_application
+>>> s = connect_application(title="Notepad")
+>>> s.menu_click("File->Save As")
+>>> s.set_text("File name:||Edit", "report.txt")
+
+# 4. Record interactions → replay script
+python gui_recorder.py      # press F7 to start, F9 to stop
 ```
 
 ---
@@ -43,8 +51,11 @@ quickstart
 
 cli-reference
 json-format
+live-mode
+recorder
 api/gui-session
 api/script-writer
+api/live-session
 api/tree-helpers
 api/ocr-helpers
 api/image-helpers
