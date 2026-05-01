@@ -1,0 +1,41 @@
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name        = "pywin-gui-inspector"
+version     = "1.0.0"
+description = "Windows GUI inspection, automation, and recording toolkit"
+requires-python = ">=3.10"
+license     = {text = "MIT"}
+
+dependencies = [
+    "pywinauto",
+    "pyautogui",
+]
+
+[project.optional-dependencies]
+ocr      = ["easyocr", "Pillow"]
+image    = ["opencv-python"]
+recorder = ["keyboard", "pystray", "Pillow"]
+all      = ["pywin-gui-inspector[ocr,image,recorder]"]
+dev      = ["pytest>=8.0", "pytest-cov>=4.0", "ruff>=0.4"]
+
+[project.scripts]
+gui-detector = "pywin_gui_inspector.detector.inspector:main"
+gui-recorder = "pywin_gui_inspector.recorder.tray_app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pywin_gui_inspector"]
+
+[tool.pytest.ini_options]
+testpaths    = ["tests"]
+addopts      = "--tb=short -q"
+
+[tool.coverage.run]
+source = ["src/pywin_gui_inspector"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under   = 80

@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-check:
-    name: Lint & import check (Python ${{ matrix.python-version }})
+  test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -24,35 +24,32 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install dependencies
+      - name: Install package with dev extras
         run: |
           python -m pip install --upgrade pip
-          pip install pywinauto pyautogui ruff
+          pip install -e ".[dev]"
 
-      - name: Lint with ruff
-        run: ruff check gui_detector.py gui_helper.py ExampleScripts/
+      - name: Run tests with coverage
+        run: pytest tests/ -v --tb=short --cov=src/pywin_gui_inspector --cov-report=term-missing
 
-      - name: Check formatting
-        run: ruff format --check gui_detector.py gui_helper.py ExampleScripts/
+  lint:
+    name: Lint & format
+    runs-on: windows-latest
 
-      - name: Verify imports
-        run: |
-          python -c "import ast, sys, pathlib
-          files = list(pathlib.Path('.').glob('*.py')) + list(pathlib.Path('ExampleScripts').glob('*.py'))
-          errors = []
-          for f in files:
-              try:
-                  ast.parse(f.read_text(encoding='utf-8'))
-              except SyntaxError as e:
-                  errors.append(f'{f}: {e}')
-          if errors:
-              print('Syntax errors:')
-              for e in errors: print(' ', e)
-              sys.exit(1)
-          print(f'Parsed {len(files)} files OK')"
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Import gui_helper
-        run: python -c "import gui_helper; print('gui_helper OK')"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
 
-      - name: Import gui_detector (syntax check only)
-        run: python -c "import ast, pathlib; ast.parse(pathlib.Path('gui_detector.py').read_text()); print('gui_detector syntax OK')"
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint — check for errors
+        run: ruff check src/ tests/
+
+      - name: Format — check style
+        run: ruff format --check src/ tests/

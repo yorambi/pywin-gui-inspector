@@ -7,30 +7,43 @@ A Windows GUI inspection, automation, and recording toolkit built on
 
 **Inspect** any running application's UI element tree, **export** it to JSON,
 **automate** from the export or live, and **record** your own interactions to
-generate a replay script — all from four self-contained Python files.
+generate a replay script — all through the `pywin_gui_inspector` package.
 
 ---
 
 ## At a glance
 
 ```bash
+# Install
+pip install -e ".[all]"
+
 # 1. Inspect Notepad and export to JSON
 python gui_detector.py --title "Notepad" --ocr --export notepad.json
+```
 
+```python
 # 2. Automate from the export
-python
->>> from gui_helper import GUISession
->>> s = GUISession("notepad.json")
->>> s.smart_click("Save")
+from pywin_gui_inspector import GUISession
+
+s = GUISession("notepad.json")
+s.smart_click("Save")
 
 # 3. Live automation — no snapshot needed
->>> from gui_live import connect_application
->>> s = connect_application(title="Notepad")
->>> s.menu_click("File->Save As")
->>> s.set_text("File name:||Edit", "report.txt")
+from pywin_gui_inspector import connect_application
 
+s = connect_application(title="Notepad")
+s.menu_click("File->Save As")
+s.set_text("File name:||Edit", "report.txt")
+```
+
+```bash
 # 4. Record interactions → replay script
 python gui_recorder.py      # press F7 to start, F9 to stop
+```
+
+```bash
+# 5. Run the tests
+pytest tests/ -v            # 88 unit tests, no live session needed
 ```
 
 ---
